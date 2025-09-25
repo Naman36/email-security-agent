@@ -110,11 +110,31 @@ class BehaviorAnalysisResult(AgentAnalysisResult):
     spoofing_indicators: List[str] = Field(..., description="Email spoofing indicators")
 
 
+class QRCodeData(BaseModel):
+    """Individual QR code analysis result."""
+    content: str = Field(..., description="QR code content (truncated if long)")
+    content_type: str = Field(..., description="Type of QR content (url, text, vcard, wifi, etc.)")
+    location: str = Field(..., description="Where QR code was found")
+    score: float = Field(..., description="Suspicion score for this QR code (0.0 to 1.0)")
+    reasons: List[str] = Field(..., description="Reasons for suspicion")
+
+
+class QRAnalysisResult(BaseModel):
+    """QR code agent analysis result."""
+    score: float = Field(..., description="Overall QR code suspicion score (0.0 to 1.0)")
+    qr_codes: List[QRCodeData] = Field(..., description="Individual QR code analyses")
+    total_qr_codes: int = Field(..., description="Total number of QR codes found")
+    suspicious_count: int = Field(..., description="Number of suspicious QR codes")
+    details: str = Field(..., description="Human-readable analysis details")
+    confidence: float = Field(..., description="Confidence in the QR analysis (0.0 to 1.0)")
+
+
 class EmailAnalysisResponse(BaseModel):
     """Response model for email analysis."""
     content_analysis: ContentAnalysisResult = Field(..., description="Content analysis results")
     link_analysis: LinkAnalysisResult = Field(..., description="Link analysis results")
     behavior_analysis: BehaviorAnalysisResult = Field(..., description="Behavior analysis results")
+    qr_analysis: QRAnalysisResult = Field(..., description="QR code analysis results")
     final_score: float = Field(..., description="Overall phishing score (0.0 to 1.0)")
     action: str = Field(..., description="Recommended action (ALLOW, FLAG, QUARANTINE, BLOCK)")
     confidence: float = Field(..., description="Overall confidence in the assessment")
@@ -146,7 +166,8 @@ async def health_check():
         "agents": {
             "content_agent": "operational",
             "link_agent": "operational",
-            "behavior_agent": "operational"
+            "behavior_agent": "operational",
+            "qr_agent": "operational"
         }
     }
 
@@ -185,6 +206,9 @@ async def analyze_email(request: EmailAnalysisRequest):
         # Convert highlights to HighlightSpan objects
         highlights = [HighlightSpan(**highlight) for highlight in analysis_result.content_analysis.get('highlights', [])]
         
+        # Convert QR codes to QRCodeData objects
+        qr_codes = [QRCodeData(**qr_code) for qr_code in analysis_result.qr_analysis.get('qr_codes', [])]
+        
         response = EmailAnalysisResponse(
             content_analysis=ContentAnalysisResult(
                 score=analysis_result.content_analysis.get('score', 0.0),
@@ -193,6 +217,14 @@ async def analyze_email(request: EmailAnalysisRequest):
             ),
             link_analysis=LinkAnalysisResult(**analysis_result.link_analysis),
             behavior_analysis=BehaviorAnalysisResult(**analysis_result.behavior_analysis),
+            qr_analysis=QRAnalysisResult(
+                score=analysis_result.qr_analysis.get('score', 0.0),
+                qr_codes=qr_codes,
+                total_qr_codes=analysis_result.qr_analysis.get('total_qr_codes', 0),
+                suspicious_count=analysis_result.qr_analysis.get('suspicious_count', 0),
+                details=analysis_result.qr_analysis.get('details', ''),
+                confidence=analysis_result.qr_analysis.get('confidence', 0.0)
+            ),
             final_score=analysis_result.final_score,
             action=analysis_result.action,
             confidence=analysis_result.confidence,
@@ -228,6 +260,10 @@ async def agents_status():
             "behavior_agent": {
                 "status": "operational",
                 "description": "Analyzes email metadata and behavioral patterns"
+            },
+            "qr_agent": {
+                "status": "operational", 
+                "description": "Analyzes QR codes in emails for malicious content"
             }
         },
         "orchestrator": {

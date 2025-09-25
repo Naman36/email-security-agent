@@ -18,9 +18,46 @@ st.set_page_config(
     layout="wide"
 )
 
-# Demo email examples
+# Demo email examples  
 DEMO_EMAILS = {
     "Select a demo email...": {},
+    "Phishing - QR Code Scam": {
+        "subject": "🎁 Exclusive Offer - Scan QR Code to Win $500!",
+        "from": "promotions@exclusive-deals.tk",
+        "to": "user@example.com",
+        "body_html": """<html><body style='background:#f0f0f0; padding:20px;'>
+        <div style='background:white; padding:20px; border-radius:10px; text-align:center;'>
+        <h1 style='color:#ff4444;'>🎁 EXCLUSIVE OFFER! 🎁</h1>
+        <p><strong>Congratulations! You've been selected for our exclusive promotion!</strong></p>
+        <p>Scan the QR code below to claim your <span style='color:green; font-size:20px;'>$500 reward</span> instantly!</p>
+        <div style='margin:20px; padding:20px; border:2px solid #ff4444;'>
+        <img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsAQAAAABRBrPYAAACxUlEQVR4nO2aTY7cNhBGH4cDMDv6BuybsE8mUfbFODehbsDecQBanxdSx4iBAHbcSQ8YaSVIb1GfWMX6oYz4iev28jMUnNiJndiJndijsXdjjDHwBizmAqt5BW7GGPPyZNsejAVJidv8ersCMlHw9no8frJtj8KQpBYSIXWfpYyTGtFWbA2JsEhS/cgS/gkWzae4vV/kC1+D/hZ7im0PxlQxjS+3uKjSP5Ztv4sd3ispdaJqTAS1oA6qQdIw3rsrBaD73H2eXJlcibZGWwHMKEp/5YPsV/fqYBoTQVay31+N8EH+3KJByhCT0+7kUZU9TQ2kVMW0IKtspUVlcsoQ8dpcmQdTOrmCpO4zTksjdrBSGiicjzjdYMZLFaMCRCl3wuYG26Kl5AoQVTEtLJIO2W24NV1akGqUtLmCU1aN3UsaLE5b2AjJKnfAlVklWuXuyzSQ9/5aHTLvS4/P5iiylDtBKoM5ednvd6VlAjqxc4/tgZQquTJ3r+7zXlNkWyO+TMOlXS1SwguYW9j2ZKTKPNAWvc9qLrBKqwHki2nA7frqi/yAEwyQ1Pc1dQV8tpVBy2N8tsrT8fieg8eK02MqxT60CBtB3e85+H+Xdl8A3Jv0JldxyrAubTWuRqcC6/Zk2x6GHU4+N8ALr+3e7QJhGS3tNiZXZqujRZgAK9mjhB5KaUiugJdqTEeDq4wvjNbttrARtJcVRkpHCrqXHkMpTYRkj7lyWFQiPsOI3a726gIvqeCUO9F+X90RlO5FozHGGKvM7foZJtbZKnO7wPryZNv+a+yv5wvda3NKTlkVKyU3zhZ9YIu5sJ/tmrZu7+ZqPvHVmPR++fx02/4VzK7X5Y+wtJBVo2pY7h3/B7Dtd7EfqmgvSRvswysNN6vZ41TKqnFzUgOrbFXMcGkXgO6zatS92z3OwIZZU3P+EHhiJ3ZiJ/ZRsW93VvuGHIR5fAAAAABJRU5ErkJggg==' width='300' height='300'>
+        <p style='margin-top:15px; color:#666;'>Scan this QR code with your mobile device</p>
+        </div>
+        <p style='color:red; font-weight:bold;'>⏰ Limited time offer! Expires in 24 hours!</p>
+        <p style='font-size:12px; color:#999;'>This offer is exclusive and cannot be shared. Act now!</p>
+        </div>
+        </body></html>""",
+        "body_text": """🎁 EXCLUSIVE OFFER! 🎁
+
+Congratulations! You've been selected for our exclusive promotion!
+
+Scan the QR code in this email to claim your $500 reward instantly!
+
+[QR CODE - scan with mobile device]
+
+⏰ Limited time offer! Expires in 24 hours!
+
+This offer is exclusive and cannot be shared. Act now!""",
+        "headers": {
+            "From": "promotions@exclusive-deals.tk",
+            "To": "user@example.com",
+            "Date": "Wed, 21 Oct 2024 16:45:00 +0000",
+            "Subject": "🎁 Exclusive Offer - Scan QR Code to Win $500!",
+            "Message-ID": "<qr-scam-12345@exclusive-deals.tk>"
+        },
+        "links": []
+    },
     "Legitimate - Meeting Invitation": {
         "subject": "Team Meeting Tomorrow - 2 PM",
         "from": "sarah.johnson@company.com",
@@ -221,6 +258,52 @@ def display_links_table(links_data: List[Dict]) -> None:
         df = pd.DataFrame(table_data)
         st.dataframe(df, use_container_width=True)
 
+
+def display_qr_codes_table(qr_codes_data: List[Dict]) -> None:
+    """Display QR codes analysis in a table."""
+    if not qr_codes_data:
+        st.info("No QR codes found in email")
+        return
+    
+    # Prepare data for table
+    table_data = []
+    for qr_code in qr_codes_data:
+        if isinstance(qr_code, dict):
+            score = qr_code.get('score', 0.0)
+            risk_level = "🔴 High" if score >= 0.7 else "🟡 Medium" if score >= 0.4 else "🟢 Low"
+            content = qr_code.get('content', 'Unknown')
+            content_type = qr_code.get('content_type', 'unknown')
+            location = qr_code.get('location', 'unknown')
+            
+            # Format content type for display
+            content_type_display = {
+                'url': '🔗 URL',
+                'text': '📝 Text', 
+                'vcard': '👤 Contact',
+                'wifi': '📶 WiFi',
+                'email': '📧 Email',
+                'phone': '📞 Phone',
+                'sms': '💬 SMS',
+                'app_store': '📱 App Store',
+                'external_image': '🖼️ External Image'
+            }.get(content_type, f'❓ {content_type.title()}')
+            
+            table_data.append({
+                'Content': content[:50] + ('...' if len(content) > 50 else ''),
+                'Type': content_type_display,
+                'Location': location.replace('_', ' ').title(),
+                'Risk Score': f"{score:.2f}",
+                'Risk Level': risk_level,
+                'Reasons': '; '.join(qr_code.get('reasons', [])[:2])  # Show first 2 reasons
+            })
+        else:
+            st.warning(f"Unexpected QR code data type: {type(qr_code)}")
+            continue
+    
+    if table_data:
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, use_container_width=True)
+
 def parse_email_text(email_text: str) -> Dict[str, Any]:
     """Parse raw email text into structured format."""
     lines = email_text.strip().split('\n')
@@ -274,10 +357,11 @@ def main():
         
         st.markdown("---")
         st.markdown("**About this tool:**")
-        st.markdown("This tool analyzes emails using three specialized AI agents:")
+        st.markdown("This tool analyzes emails using four specialized AI agents:")
         st.markdown("- 🔍 **Content Agent**: ML-based text analysis")
         st.markdown("- 🔗 **Link Agent**: URL and domain analysis") 
         st.markdown("- 👤 **Behavior Agent**: Sender pattern analysis")
+        st.markdown("- 📱 **QR Code Agent**: QR code detection and analysis")
     
     # Main content
     col1, col2 = st.columns([2, 1])
@@ -387,7 +471,7 @@ To: {email_data.get('to', '')}
                     # Agent scores
                     st.subheader("🤖 Agent Scores")
                     
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
                         content_score = result.get('content_analysis', {}).get('score', 0.0)
@@ -413,8 +497,16 @@ To: {email_data.get('to', '')}
                             config={'displayModeBar': False}
                         )
                     
+                    with col4:
+                        qr_score = result.get('qr_analysis', {}).get('score', 0.0)
+                        st.plotly_chart(
+                            create_progress_bar(qr_score, "QR Code Agent", "#ff9800"),
+                            use_container_width=True,
+                            config={'displayModeBar': False}
+                        )
+                    
                     # Detailed analysis tabs
-                    tab1, tab2, tab3, tab4 = st.tabs(["📝 Content Analysis", "🔗 Link Analysis", "👤 Behavior Analysis", "📧 Original Email"])
+                    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Content Analysis", "🔗 Link Analysis", "👤 Behavior Analysis", "📱 QR Code Analysis", "📧 Original Email"])
                     
                     with tab1:
                         st.subheader("🔍 Content Analysis")
@@ -491,6 +583,35 @@ To: {email_data.get('to', '')}
                                     st.write(f"- {item}")
                     
                     with tab4:
+                        st.subheader("📱 QR Code Analysis")
+                        qr_analysis = result.get('qr_analysis', {})
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("QR Code Score", f"{qr_analysis.get('score', 0.0):.3f}")
+                        with col2:
+                            st.metric("Total QR Codes", qr_analysis.get('total_qr_codes', 0))
+                        with col3:
+                            st.metric("Suspicious QR Codes", qr_analysis.get('suspicious_count', 0))
+                        
+                        st.markdown("**Analysis:**")
+                        st.write(qr_analysis.get('details', 'No details available'))
+                        
+                        # QR codes table
+                        if qr_analysis.get('qr_codes'):
+                            st.markdown("**QR Codes Found:**")
+                            display_qr_codes_table(qr_analysis.get('qr_codes', []))
+                            
+                            # QR codes details
+                            with st.expander("🎯 View QR code details"):
+                                for i, qr_code in enumerate(qr_analysis.get('qr_codes', []), 1):
+                                    st.write(f"**{i}.** Type: `{qr_code.get('content_type', 'unknown')}` - Location: `{qr_code.get('location', 'unknown')}`")
+                                    st.write(f"   Content: {qr_code.get('content', 'Unknown')[:100]}")
+                                    if qr_code.get('reasons'):
+                                        st.write(f"   Reasons: {'; '.join(qr_code.get('reasons', []))}")
+                                    st.write("")
+                    
+                    with tab5:
                         st.subheader("📧 Original Email")
                         
                         # Email headers
