@@ -188,16 +188,34 @@ def display_links_table(links_data: List[Dict]) -> None:
     # Prepare data for table
     table_data = []
     for link in links_data:
-        score = link.get('score', 0.0)
-        risk_level = "🔴 High" if score >= 0.7 else "🟡 Medium" if score >= 0.4 else "🟢 Low"
-        
-        table_data.append({
-            'URL': link.get('url', 'Unknown')[:50] + ('...' if len(link.get('url', '')) > 50 else ''),
-            'Domain': link.get('domain', 'Unknown'),
-            'Risk Score': f"{score:.2f}",
-            'Risk Level': risk_level,
-            'Reasons': '; '.join(link.get('reasons', [])[:2])  # Show first 2 reasons
-        })
+        # Handle both string URLs and dictionary objects
+        if isinstance(link, str):
+            # If link is just a URL string, create a basic entry
+            url = link
+            table_data.append({
+                'URL': url[:50] + ('...' if len(url) > 50 else ''),
+                'Domain': url.split('/')[2] if '//' in url else 'Unknown',
+                'Risk Score': 'N/A',
+                'Risk Level': '🟡 Medium',
+                'Reasons': 'Basic URL detected'
+            })
+        elif isinstance(link, dict):
+            # If link is a dictionary with analysis data
+            score = link.get('score', 0.0)
+            risk_level = "🔴 High" if score >= 0.7 else "🟡 Medium" if score >= 0.4 else "🟢 Low"
+            url = link.get('url', 'Unknown')
+            
+            table_data.append({
+                'URL': url[:50] + ('...' if len(url) > 50 else ''),
+                'Domain': link.get('domain', 'Unknown'),
+                'Risk Score': f"{score:.2f}",
+                'Risk Level': risk_level,
+                'Reasons': '; '.join(link.get('reasons', [])[:2])  # Show first 2 reasons
+            })
+        else:
+            # Handle unexpected data types
+            st.warning(f"Unexpected link data type: {type(link)}")
+            continue
     
     if table_data:
         df = pd.DataFrame(table_data)
@@ -484,9 +502,25 @@ To: {email_data.get('to', '')}
                         # Email body
                         st.markdown("**Email Body:**")
                         if email_data.get('body_html'):
-                            st.components.v1.html(email_data['body_html'], height=300, scrolling=True)
+                            # Wrap HTML in a container with proper styling for readability
+                            wrapped_html = f"""
+                            <div style="
+                                background-color: white; 
+                                color: black; 
+                                padding: 15px; 
+                                border: 1px solid #ddd; 
+                                border-radius: 5px;
+                                font-family: Arial, sans-serif;
+                                line-height: 1.6;
+                                max-width: 100%;
+                                overflow-wrap: break-word;
+                            ">
+                                {email_data['body_html']}
+                            </div>
+                            """
+                            st.components.v1.html(wrapped_html, height=300, scrolling=True)
                         else:
-                            st.text(email_data.get('body_text', ''))
+                            st.text_area("Email Text:", email_data.get('body_text', ''), height=300, disabled=True)
                     
                     # Feedback section
                     st.header("💬 Feedback")
