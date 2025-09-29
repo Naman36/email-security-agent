@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 import uvicorn
 import logging
 from datetime import datetime
+from dataclasses import asdict
 
 from orchestrator import EmailAnalysisOrchestrator
 
@@ -110,6 +111,13 @@ class BehaviorAnalysisResult(AgentAnalysisResult):
     spoofing_indicators: List[str] = Field(..., description="Email spoofing indicators")
 
 
+class HeaderAnalysisResult(AgentAnalysisResult):
+    """Header agent analysis result."""
+    verdict: str = Field(..., description="Verdict of the header analysis")
+    routing_analysis: Optional[Dict[str, Any]] = Field(..., description="Analysis of the email routing path")
+    reasons: List[str] = Field(..., description="Reasons for the verdict")
+
+
 class QRCodeData(BaseModel):
     """Individual QR code analysis result."""
     content: str = Field(..., description="QR code content (truncated if long)")
@@ -134,6 +142,7 @@ class EmailAnalysisResponse(BaseModel):
     content_analysis: ContentAnalysisResult = Field(..., description="Content analysis results")
     link_analysis: LinkAnalysisResult = Field(..., description="Link analysis results")
     behavior_analysis: BehaviorAnalysisResult = Field(..., description="Behavior analysis results")
+    header_analysis: HeaderAnalysisResult = Field(..., description="Header analysis results")
     qr_analysis: QRAnalysisResult = Field(..., description="QR code analysis results")
     final_score: float = Field(..., description="Overall phishing score (0.0 to 1.0)")
     action: str = Field(..., description="Recommended action (ALLOW, FLAG, QUARANTINE, BLOCK)")
@@ -208,6 +217,10 @@ async def analyze_email(request: EmailAnalysisRequest):
         
         # Convert QR codes to QRCodeData objects
         qr_codes = [QRCodeData(**qr_code) for qr_code in analysis_result.qr_analysis.get('qr_codes', [])]
+
+        # Convert routing_analysis to dict
+        if 'routing_analysis' in analysis_result.header_analysis and analysis_result.header_analysis['routing_analysis'] is not None:
+            analysis_result.header_analysis['routing_analysis'] = asdict(analysis_result.header_analysis['routing_analysis'])
         
         response = EmailAnalysisResponse(
             content_analysis=ContentAnalysisResult(
@@ -217,6 +230,7 @@ async def analyze_email(request: EmailAnalysisRequest):
             ),
             link_analysis=LinkAnalysisResult(**analysis_result.link_analysis),
             behavior_analysis=BehaviorAnalysisResult(**analysis_result.behavior_analysis),
+            header_analysis=HeaderAnalysisResult(**analysis_result.header_analysis),
             qr_analysis=QRAnalysisResult(
                 score=analysis_result.qr_analysis.get('score', 0.0),
                 qr_codes=qr_codes,

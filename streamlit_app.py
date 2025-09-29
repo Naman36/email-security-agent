@@ -137,6 +137,57 @@ This offer is exclusive and cannot be shared. Act now!""",
             "https://technews.com",
             "https://technews.com/unsubscribe?id=12345"
         ]
+    },
+    "Header Analysis Demo - Identity Mismatch": {
+        "subject": "URGENT: Your PayPal account will be suspended!",
+        "from": "PayPal Security <security@paypal.com>",
+        "to": "user@example.com",
+        "body_html": "<html><body><div style='background:#003087;color:white;padding:20px'><h2>PayPal Security Alert</h2></div><p><strong>URGENT ACTION REQUIRED</strong></p><p>Dear PayPal User,</p><p>We have detected suspicious activity on your account. Your account will be <span style='color:red;font-weight:bold'>PERMANENTLY SUSPENDED</span> within 24 hours unless you verify your identity immediately.</p><p><a href='http://192.168.1.100/paypal-verify' style='background:#0070ba;color:white;padding:10px 20px;text-decoration:none'>VERIFY ACCOUNT NOW</a></p><p>If you do not act within 24 hours, you will lose access to your account forever.</p><p>Thank you,<br>PayPal Security Team</p></body></html>",
+        "body_text": "URGENT ACTION REQUIRED\n\nDear PayPal User,\n\nWe have detected suspicious activity on your account. Your account will be PERMANENTLY SUSPENDED within 24 hours unless you verify your identity immediately.\n\nClick here to verify: http://192.168.1.100/paypal-verify\n\nIf you do not act within 24 hours, you will lose access to your account forever.\n\nThank you,\nPayPal Security Team",
+        "headers": {
+            "From": "PayPal Security <security@paypal.com>",
+            "To": "user@example.com", 
+            "Date": "Wed, 21 Oct 2024 03:15:00 +0000",
+            "Reply-To": "noreply@suspicious-sender.com",
+            "Subject": "URGENT: Your PayPal account will be suspended!",
+            "Message-ID": "<suspicious123@fake-paypal.ru>",
+            "Received": [
+                "from suspicious-server.ru (unknown [192.168.1.100]) by mx.example.com; Mon, 21 Oct 2024 11:00:05 +0000",
+                "from bulk-mailer.sketchy.com by suspicious-server.ru; Mon, 21 Oct 2024 11:00:02 +0000"
+            ],
+            "Return-Path": "<noreply@fake-paypal.ru>",
+            "Authentication-Results": "mx.example.com; dkim=fail; spf=fail; dmarc=fail",
+            "X-Mailer": "BulkMailer Pro v2.1"
+        },
+        "links": ["http://192.168.1.100/paypal-verify"]
+    },
+    "Suspicious Routing - Excessive Hops": {
+        "subject": "Service notification",
+        "from": "notifications@legitimate-service.com",
+        "to": "user@example.com",
+        "body_html": "<html><body><p>This is a service notification from a legitimate service.</p></body></html>",
+        "body_text": "This is a service notification from a legitimate service.",
+        "headers": {
+            "From": "notifications@legitimate-service.com",
+            "To": "user@example.com",
+            "Subject": "Service notification",
+            "Date": "Mon, 21 Oct 2024 12:00:00 +0000",
+            "Message-ID": "<notification456@legitimate-service.com>",
+            "Received": [
+                "from final-server.com by mx.example.com; Mon, 21 Oct 2024 12:00:15 +0000",
+                "from relay9.suspicious.tk by final-server.com; Mon, 21 Oct 2024 12:00:12 +0000",
+                "from relay8.bulk.ml by relay9.suspicious.tk; Mon, 21 Oct 2024 12:00:10 +0000",
+                "from relay7.spam.gq by relay8.bulk.ml; Mon, 21 Oct 2024 12:00:08 +0000",
+                "from relay6.mass.cf by relay7.spam.gq; Mon, 21 Oct 2024 12:00:06 +0000",
+                "from relay5.campaign.ga by relay6.mass.cf; Mon, 21 Oct 2024 12:00:04 +0000",
+                "from relay4.marketing.ru by relay5.campaign.ga; Mon, 21 Oct 2024 12:00:02 +0000",
+                "from relay3.bulk.cn by relay4.marketing.ru; Mon, 21 Oct 2024 12:00:00 +0000",
+                "from relay2.spam.cc by relay3.bulk.cn; Mon, 21 Oct 2024 11:59:58 +0000",
+                "from relay1.suspicious.pw by relay2.spam.cc; Mon, 21 Oct 2024 11:59:56 +0000",
+                "from origin.legitimate-service.com by relay1.suspicious.pw; Mon, 21 Oct 2024 11:59:54 +0000"
+            ]
+        },
+        "links": []
     }
 }
 
@@ -357,10 +408,11 @@ def main():
         
         st.markdown("---")
         st.markdown("**About this tool:**")
-        st.markdown("This tool analyzes emails using four specialized AI agents:")
+        st.markdown("This tool analyzes emails using five specialized AI agents:")
         st.markdown("- 🔍 **Content Agent**: ML-based text analysis")
         st.markdown("- 🔗 **Link Agent**: URL and domain analysis") 
         st.markdown("- 👤 **Behavior Agent**: Sender pattern analysis")
+        st.markdown("- 📧 **Header Agent**: Email routing and identity analysis")
         st.markdown("- 📱 **QR Code Agent**: QR code detection and analysis")
     
     # Main content
@@ -471,7 +523,7 @@ To: {email_data.get('to', '')}
                     # Agent scores
                     st.subheader("🤖 Agent Scores")
                     
-                    col1, col2, col3, col4 = st.columns(4)
+                    col1, col2, col3, col4, col5 = st.columns(5)
                     
                     with col1:
                         content_score = result.get('content_analysis', {}).get('score', 0.0)
@@ -498,6 +550,14 @@ To: {email_data.get('to', '')}
                         )
                     
                     with col4:
+                        header_score = result.get('header_analysis', {}).get('score', 0.0)
+                        st.plotly_chart(
+                            create_progress_bar(header_score, "Header Agent", "#9c27b0"),
+                            use_container_width=True,
+                            config={'displayModeBar': False}
+                        )
+                    
+                    with col5:
                         qr_score = result.get('qr_analysis', {}).get('score', 0.0)
                         st.plotly_chart(
                             create_progress_bar(qr_score, "QR Code Agent", "#ff9800"),
@@ -506,7 +566,7 @@ To: {email_data.get('to', '')}
                         )
                     
                     # Detailed analysis tabs
-                    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Content Analysis", "🔗 Link Analysis", "👤 Behavior Analysis", "📱 QR Code Analysis", "📧 Original Email"])
+                    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📝 Content Analysis", "🔗 Link Analysis", "👤 Behavior Analysis", "📧 Header Analysis", "📱 QR Code Analysis", "📧 Original Email"])
                     
                     with tab1:
                         st.subheader("🔍 Content Analysis")
@@ -583,6 +643,60 @@ To: {email_data.get('to', '')}
                                     st.write(f"- {item}")
                     
                     with tab4:
+                        st.subheader("📧 Header Analysis")
+                        header_analysis = result.get('header_analysis', {})
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Header Score", f"{header_analysis.get('score', 0.0):.3f}")
+                        with col2:
+                            verdict = header_analysis.get('verdict', 'normal')
+                            verdict_emoji = {
+                                'normal': '🟢',
+                                'identity mismatch': '🔴', 
+                                'suspicious routing': '🟡'
+                            }.get(verdict, '❓')
+                            st.metric("Verdict", f"{verdict_emoji} {verdict.title()}")
+                        with col3:
+                            routing_analysis = header_analysis.get('routing_analysis')
+                            if routing_analysis:
+                                st.metric("Routing Hops", routing_analysis.get('total_hops', 0))
+                            else:
+                                st.metric("Routing Hops", "N/A")
+                        
+                        st.markdown("**Analysis:**")
+                        st.write(header_analysis.get('details', 'No details available'))
+                        
+                        # Header issues
+                        if header_analysis.get('reasons'):
+                            st.markdown("**Key Issues:**")
+                            for i, reason in enumerate(header_analysis.get('reasons', []), 1):
+                                st.write(f"{i}. {reason}")
+                        
+                        # Routing analysis details
+                        if routing_analysis:
+                            with st.expander("🛣️ Routing Path Details"):
+                                st.write(f"**Total Hops:** {routing_analysis.get('total_hops', 0)}")
+                                if routing_analysis.get('origin_server'):
+                                    st.write(f"**Origin Server:** {routing_analysis.get('origin_server')}")
+                                if routing_analysis.get('origin_ip'):
+                                    st.write(f"**Origin IP:** {routing_analysis.get('origin_ip')}")
+                                if routing_analysis.get('final_server'):
+                                    st.write(f"**Final Server:** {routing_analysis.get('final_server')}")
+                                
+                                if routing_analysis.get('suspicious_hops'):
+                                    st.write(f"**Suspicious Servers:** {', '.join(routing_analysis.get('suspicious_hops', []))}")
+                                
+                                # Show routing path
+                                route_hops = routing_analysis.get('route_hops', [])
+                                if route_hops:
+                                    st.write("**Routing Path:**")
+                                    for i, hop in enumerate(route_hops, 1):
+                                        server = hop.get('server', 'Unknown')
+                                        ip = hop.get('ip_address', 'N/A')
+                                        st.write(f"  {i}. {server} ({ip})")
+                    
+                    with tab5:
                         st.subheader("📱 QR Code Analysis")
                         qr_analysis = result.get('qr_analysis', {})
                         
@@ -611,7 +725,7 @@ To: {email_data.get('to', '')}
                                         st.write(f"   Reasons: {'; '.join(qr_code.get('reasons', []))}")
                                     st.write("")
                     
-                    with tab5:
+                    with tab6:
                         st.subheader("📧 Original Email")
                         
                         # Email headers

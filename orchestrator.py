@@ -10,6 +10,7 @@ from agents.content_agent import analyze_content
 from agents.link_agent import LinkAgent, LinkAnalysisResult
 from agents.behavior_agent import BehaviorAgent, BehaviorAnalysisResult
 from agents.qr_agent import QRCodeAgent, QRAnalysisResult
+from agents.header_agent import HeaderAgent, analyze_headers
 
 
 # ============================================================================
@@ -19,14 +20,15 @@ from agents.qr_agent import QRCodeAgent, QRAnalysisResult
 @dataclass
 class OrchestrationConfig:
     """Configuration for orchestration weights."""
-    content_weight: float = 0.35
-    link_weight: float = 0.25
-    behavior_weight: float = 0.25
-    qr_weight: float = 0.15
+    content_weight: float = 0.30
+    link_weight: float = 0.20
+    behavior_weight: float = 0.20
+    header_weight: float = 0.20
+    qr_weight: float = 0.10
     
     def __post_init__(self):
         """Validate weights sum to 1.0."""
-        total = self.content_weight + self.link_weight + self.behavior_weight + self.qr_weight
+        total = self.content_weight + self.link_weight + self.behavior_weight + self.header_weight + self.qr_weight
         if abs(total - 1.0) > 0.001:
             raise ValueError(f"Weights must sum to 1.0, got {total}")
 
@@ -45,6 +47,7 @@ async def orchestrate(
     content_out: Dict[str, Any], 
     link_out: Dict[str, Any], 
     behavior_out: Dict[str, Any],
+    header_out: Dict[str, Any],
     qr_out: Dict[str, Any],
     config: Optional[OrchestrationConfig] = None
 ) -> OrchestrationResult:
@@ -55,8 +58,9 @@ async def orchestrate(
         content_out: Content agent output with keys: score, highlights, explain
         link_out: Link agent output with keys: score, links, details
         behavior_out: Behavior agent output with keys: score, reasons, sender_history, details
+        header_out: Header agent output with keys: score, verdict, routing_analysis, details
         qr_out: QR code agent output with keys: score, qr_codes, details
-        config: Optional configuration for weights (default: content=0.35, link=0.25, behavior=0.25, qr=0.15)
+        config: Optional configuration for weights (default: content=0.30, link=0.20, behavior=0.20, header=0.20, qr=0.10)
         
     Returns:
         OrchestrationResult with final score, action, and summary
@@ -68,6 +72,7 @@ async def orchestrate(
     content_score = content_out.get('score', 0.0)
     link_score = link_out.get('score', 0.0)
     behavior_score = behavior_out.get('score', 0.0)
+    header_score = header_out.get('score', 0.0)
     qr_score = qr_out.get('score', 0.0)
     
     # Calculate weighted final score
@@ -75,6 +80,7 @@ async def orchestrate(
         content_score * config.content_weight +
         link_score * config.link_weight +
         behavior_score * config.behavior_weight +
+        header_score * config.header_weight +
         qr_score * config.qr_weight
     )
     
@@ -101,6 +107,17 @@ async def orchestrate(
         elif action == "flag":
             action = "quarantine"
     
+    if header_score >= 0.8:
+        # High header suspicion should escalate action
+        header_verdict = header_out.get('verdict', 'normal')
+        if header_verdict == 'identity mismatch':
+            action = "quarantine"  # Identity mismatch is very serious
+        elif header_verdict == 'suspicious routing':
+            if action == "allow":
+                action = "flag"
+            elif action == "flag":
+                action = "quarantine"
+    
     if qr_score >= 0.8 and qr_out.get('suspicious_count', 0) > 0:
         # High QR suspicion should escalate action
         if action == "allow":
@@ -109,13 +126,13 @@ async def orchestrate(
             action = "quarantine"
     
     # Calculate confidence
-    confidence = _calculate_confidence(content_score, link_score, behavior_score, qr_score, final_score)
+    confidence = _calculate_confidence(content_score, link_score, behavior_score, header_score, qr_score, final_score)
     
     # Collect detailed reasons from all agents
-    detailed_reasons = _collect_detailed_reasons(content_out, link_out, behavior_out, qr_out)
+    detailed_reasons = _collect_detailed_reasons(content_out, link_out, behavior_out, header_out, qr_out)
     
     # Generate human-readable summary
-    summary = generate_summary(content_out, link_out, behavior_out, qr_out, final_score, detailed_reasons)
+    summary = generate_summary(content_out, link_out, behavior_out, header_out, qr_out, final_score, detailed_reasons)
     
     return OrchestrationResult(
         final_score=final_score,
@@ -130,6 +147,7 @@ def generate_summary(
     content_out: Dict[str, Any],
     link_out: Dict[str, Any], 
     behavior_out: Dict[str, Any],
+    header_out: Dict[str, Any],
     qr_out: Dict[str, Any],
     final_score: float,
     detailed_reasons: List[Dict[str, Any]]
@@ -141,6 +159,7 @@ def generate_summary(
         content_out: Content agent output
         link_out: Link agent output  
         behavior_out: Behavior agent output
+        header_out: Header agent output
         qr_out: QR code agent output
         final_score: Overall risk score
         detailed_reasons: Collected reasons from all agents
@@ -193,6 +212,15 @@ def generate_summary(
         else:
             agent_highlights.append("Behavior: Pattern anomalies")
     
+    if header_out.get('score', 0) >= 0.5:
+        header_verdict = header_out.get('verdict', 'normal')
+        if header_verdict == 'identity mismatch':
+            agent_highlights.append("Headers: Identity mismatch")
+        elif header_verdict == 'suspicious routing':
+            agent_highlights.append("Headers: Suspicious routing")
+        else:
+            agent_highlights.append("Headers: Authentication issues")
+    
     if qr_out.get('score', 0) >= 0.5:
         qr_count = qr_out.get('total_qr_codes', 0)
         suspicious_qr_count = qr_out.get('suspicious_count', 0)
@@ -208,9 +236,9 @@ def generate_summary(
 
 
 def _calculate_confidence(content_score: float, link_score: float, 
-                         behavior_score: float, qr_score: float, final_score: float) -> float:
+                         behavior_score: float, header_score: float, qr_score: float, final_score: float) -> float:
     """Calculate confidence based on score distribution and agreement."""
-    scores = [content_score, link_score, behavior_score, qr_score]
+    scores = [content_score, link_score, behavior_score, header_score, qr_score]
     
     # Base confidence from final score
     base_confidence = 0.6 + (final_score * 0.3)
@@ -227,7 +255,7 @@ def _calculate_confidence(content_score: float, link_score: float,
 
 
 def _collect_detailed_reasons(content_out: Dict[str, Any], link_out: Dict[str, Any], 
-                             behavior_out: Dict[str, Any], qr_out: Dict[str, Any]) -> List[Dict[str, Any]]:
+                             behavior_out: Dict[str, Any], header_out: Dict[str, Any], qr_out: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Collect and prioritize reasons from all agents."""
     reasons = []
     
@@ -239,8 +267,8 @@ def _collect_detailed_reasons(content_out: Dict[str, Any], link_out: Dict[str, A
             reasons.append({
                 'agent': 'content',
                 'score': content_score,
-                'weight': 0.5,
-                'priority': content_score * 0.5,
+                'weight': 0.30,
+                'priority': content_score * 0.30,
                 'text': f"Content: {content_explain}"
             })
     
@@ -252,8 +280,8 @@ def _collect_detailed_reasons(content_out: Dict[str, Any], link_out: Dict[str, A
             reasons.append({
                 'agent': 'link',
                 'score': link_score,
-                'weight': 0.3,
-                'priority': link_score * 0.3,
+                'weight': 0.20,
+                'priority': link_score * 0.20,
                 'text': f"Links: {link_details}"
             })
         
@@ -265,8 +293,8 @@ def _collect_detailed_reasons(content_out: Dict[str, Any], link_out: Dict[str, A
                     reasons.append({
                         'agent': 'link',
                         'score': link_data.get('score', 0),
-                        'weight': 0.3,
-                        'priority': link_data.get('score', 0) * 0.3,
+                        'weight': 0.20,
+                        'priority': link_data.get('score', 0) * 0.20,
                         'text': f"Link {link_data.get('domain', 'unknown')}: {reason}"
                     })
     
@@ -278,9 +306,34 @@ def _collect_detailed_reasons(content_out: Dict[str, Any], link_out: Dict[str, A
             reasons.append({
                 'agent': 'behavior',
                 'score': behavior_score,
-                'weight': 0.25,
-                'priority': behavior_score * 0.25,
+                'weight': 0.20,
+                'priority': behavior_score * 0.20,
                 'text': f"Behavior: {reason}"
+            })
+    
+    # Header agent reasons
+    header_score = header_out.get('score', 0.0)
+    if header_score > 0:
+        header_details = header_out.get('details', '')
+        header_verdict = header_out.get('verdict', 'normal')
+        if header_details:
+            reasons.append({
+                'agent': 'header',
+                'score': header_score,
+                'weight': 0.20,
+                'priority': header_score * 0.20,
+                'text': f"Headers: {header_details}"
+            })
+        
+        # Add specific header reasons
+        header_reasons = header_out.get('reasons', [])
+        for reason in header_reasons[:2]:  # Top 2 header reasons
+            reasons.append({
+                'agent': 'header',
+                'score': header_score,
+                'weight': 0.20,
+                'priority': header_score * 0.20,
+                'text': f"Headers: {reason}"
             })
     
     # QR code agent reasons
@@ -291,8 +344,8 @@ def _collect_detailed_reasons(content_out: Dict[str, Any], link_out: Dict[str, A
             reasons.append({
                 'agent': 'qr',
                 'score': qr_score,
-                'weight': 0.15,
-                'priority': qr_score * 0.15,
+                'weight': 0.10,
+                'priority': qr_score * 0.10,
                 'text': f"QR Codes: {qr_details}"
             })
         
@@ -304,8 +357,8 @@ def _collect_detailed_reasons(content_out: Dict[str, Any], link_out: Dict[str, A
                     reasons.append({
                         'agent': 'qr',
                         'score': qr_data.get('score', 0),
-                        'weight': 0.15,
-                        'priority': qr_data.get('score', 0) * 0.15,
+                        'weight': 0.10,
+                        'priority': qr_data.get('score', 0) * 0.10,
                         'text': f"QR Code ({qr_data.get('content_type', 'unknown')}): {reason}"
                     })
     
@@ -360,6 +413,7 @@ class EmailAnalysisResponse:
     content_analysis: Dict[str, Any]
     link_analysis: Dict[str, Any]
     behavior_analysis: Dict[str, Any]
+    header_analysis: Dict[str, Any]
     qr_analysis: Dict[str, Any]
     final_score: float
     action: str
@@ -373,6 +427,7 @@ class EmailAnalysisOrchestrator:
     def __init__(self):
         self.link_agent = LinkAgent()
         self.behavior_agent = BehaviorAgent()
+        self.header_agent = HeaderAgent()
         self.qr_agent = QRCodeAgent()
     
     async def analyze_email(self, email_data: Dict[str, Any]) -> EmailAnalysisResponse:
@@ -398,10 +453,11 @@ class EmailAnalysisOrchestrator:
         
         # Run all agents in parallel
         try:
-            content_result, link_result, behavior_result, qr_result = await asyncio.gather(
+            content_result, link_result, behavior_result, header_result, qr_result = await asyncio.gather(
                 analyze_content(agent_data['body_text'], agent_data['subject']),
                 self.link_agent.analyze(agent_data),
                 self.behavior_agent.analyze(agent_data),
+                self.header_agent.analyze(agent_data),
                 self.qr_agent.analyze(agent_data),
                 return_exceptions=True
             )
@@ -416,6 +472,9 @@ class EmailAnalysisOrchestrator:
             if isinstance(behavior_result, Exception):
                 behavior_result = self._get_default_behavior_result(str(behavior_result))
             
+            if isinstance(header_result, Exception):
+                header_result = self._get_default_header_result(str(header_result))
+            
             if isinstance(qr_result, Exception):
                 qr_result = self._get_default_qr_result(str(qr_result))
             
@@ -424,20 +483,22 @@ class EmailAnalysisOrchestrator:
             content_result = self._get_default_content_result(str(e))
             link_result = self._get_default_link_result(str(e))
             behavior_result = self._get_default_behavior_result(str(e))
+            header_result = self._get_default_header_result(str(e))
             qr_result = self._get_default_qr_result(str(e))
         
         # Calculate final score and determine action
         final_score, action, confidence = self._calculate_final_assessment(
-            content_result, link_result, behavior_result, qr_result
+            content_result, link_result, behavior_result, header_result, qr_result
         )
         
         # Generate summary
-        summary = self._generate_summary(content_result, link_result, behavior_result, qr_result, final_score)
+        summary = self._generate_summary(content_result, link_result, behavior_result, header_result, qr_result, final_score)
         
         return EmailAnalysisResponse(
             content_analysis=content_result,
             link_analysis=asdict(link_result),
             behavior_analysis=asdict(behavior_result),
+            header_analysis=header_result,  # Already a dict
             qr_analysis=qr_result,
             final_score=final_score,
             action=action,
@@ -448,6 +509,7 @@ class EmailAnalysisOrchestrator:
     def _calculate_final_assessment(self, content_result: Dict[str, Any],
                                    link_result: LinkAnalysisResult,
                                    behavior_result: BehaviorAnalysisResult,
+                                   header_result: Dict[str, Any],
                                    qr_result: Dict[str, Any]) -> tuple[float, str, float]:
         """
         Calculate final phishing score and recommended action.
@@ -456,22 +518,25 @@ class EmailAnalysisOrchestrator:
             Tuple of (final_score, action, confidence)
         """
         # Weighted average of agent scores
-        # Content analysis: 35%, Link analysis: 25%, Behavior analysis: 25%, QR analysis: 15%
+        # Content analysis: 30%, Link analysis: 20%, Behavior analysis: 20%, Header analysis: 20%, QR analysis: 10%
         final_score = (
-            content_result.get('score', 0.0) * 0.35 +
-            link_result.score * 0.25 +
-            behavior_result.score * 0.25 +
-            qr_result.get('score', 0.0) * 0.15
+            content_result.get('score', 0.0) * 0.30 +
+            link_result.score * 0.20 +
+            behavior_result.score * 0.20 +
+            header_result.get('score', 0.0) * 0.20 +
+            qr_result.get('score', 0.0) * 0.10
         )
         
         # Calculate overall confidence (content agent doesn't provide confidence, use score as proxy)
         content_confidence = min(0.9, content_result.get('score', 0.0) + 0.1)
+        header_confidence = header_result.get('confidence', 0.8)  # Header agent provides confidence
         qr_confidence = qr_result.get('confidence', 0.8)  # QR agent provides confidence
         confidence = (
-            content_confidence * 0.35 +
-            link_result.confidence * 0.25 +
-            behavior_result.confidence * 0.25 +
-            qr_confidence * 0.15
+            content_confidence * 0.30 +
+            link_result.confidence * 0.20 +
+            behavior_result.confidence * 0.20 +
+            header_confidence * 0.20 +
+            qr_confidence * 0.10
         )
         
         # Determine action based on score thresholds
@@ -494,6 +559,17 @@ class EmailAnalysisOrchestrator:
         if link_result.score >= 0.8 and len(link_result.ip_addresses) > 0:
             action = "BLOCK"
         
+        # Header override rules
+        if header_result.get('score', 0.0) >= 0.8:
+            header_verdict = header_result.get('verdict', 'normal')
+            if header_verdict == 'identity mismatch':
+                action = "BLOCK"  # Identity mismatch is very serious
+            elif header_verdict == 'suspicious routing':
+                if action == "ALLOW":
+                    action = "FLAG"
+                elif action == "FLAG":
+                    action = "QUARANTINE"
+        
         # QR code override rules
         if qr_result.get('score', 0.0) >= 0.8 and qr_result.get('suspicious_count', 0) > 0:
             if action == "ALLOW":
@@ -506,6 +582,7 @@ class EmailAnalysisOrchestrator:
     def _generate_summary(self, content_result: Dict[str, Any],
                          link_result: LinkAnalysisResult,
                          behavior_result: BehaviorAnalysisResult,
+                         header_result: Dict[str, Any],
                          qr_result: Dict[str, Any],
                          final_score: float) -> str:
         """Generate a human-readable summary of the analysis."""
@@ -538,6 +615,15 @@ class EmailAnalysisOrchestrator:
                 key_findings.append(f"Behavior: Authentication failures detected")
             elif behavior_result.spoofing_indicators:
                 key_findings.append(f"Behavior: Spoofing indicators found")
+        
+        if header_result.get('score', 0.0) >= 0.5:
+            header_verdict = header_result.get('verdict', 'normal')
+            if header_verdict == 'identity mismatch':
+                key_findings.append("Headers: Identity mismatch detected")
+            elif header_verdict == 'suspicious routing':
+                key_findings.append("Headers: Suspicious routing patterns")
+            else:
+                key_findings.append("Headers: Authentication anomalies detected")
         
         if qr_result.get('score', 0.0) >= 0.5:
             qr_count = qr_result.get('total_qr_codes', 0)
@@ -588,6 +674,17 @@ class EmailAnalysisOrchestrator:
             confidence=0.0,
             details=f"Behavior analysis failed: {error_msg}"
         )
+    
+    def _get_default_header_result(self, error_msg: str) -> Dict[str, Any]:
+        """Get default header analysis result in case of error."""
+        return {
+            'score': 0.0,
+            'verdict': 'normal',
+            'routing_analysis': None,
+            'reasons': [],
+            'details': f"Header analysis failed: {error_msg}",
+            'confidence': 0.0
+        }
     
     def _get_default_qr_result(self, error_msg: str) -> Dict[str, Any]:
         """Get default QR analysis result in case of error."""
