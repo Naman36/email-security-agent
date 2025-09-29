@@ -9,6 +9,7 @@
   - **Content Agent**: ML-based text analysis with sentence transformers and logistic regression
   - **Link Agent**: Advanced URL analysis with domain verification, homoglyph detection, and WHOIS lookup
   - **Behavior Agent**: Sender pattern tracking with SQLite/Redis storage and behavioral heuristics
+  - **Header Agent**: Examines email headers for routing anomalies and authentication failures
   - **QR Code Agent**: Computer vision-based QR code detection and content analysis with threat assessment
 
 - 🚀 **Modern Stack**: FastAPI backend with Streamlit web interface
@@ -225,6 +226,13 @@ pytest tests/ -v --cov=.
 - **Pattern Analysis**: Display name consistency, reply-to mismatches
 - **Reputation Scoring**: New sender detection (+0.4 risk)
 - **Header Analysis**: Authentication failures, timing anomalies
+
+### Header Agent
+
+- **Routing Analysis**: Parses and analyzes the `Received` headers to trace the email's path.
+- **Identity Mismatch**: Detects when the sender's domain doesn't match the originating server.
+- **Suspicious Routing**: Identifies emails with an excessive number of hops or that route through known malicious servers.
+- **Authentication Checks**: Verifies SPF, DKIM, and DMARC authentication results.
 
 ### QR Code Agent
 
